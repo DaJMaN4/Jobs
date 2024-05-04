@@ -32,6 +32,7 @@ import java.util.UUID;
 import java.util.WeakHashMap;
 import java.util.logging.Logger;
 
+import dev.lone.itemsadder.api.CustomBlock;
 import org.bukkit.Bukkit;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Entity;
@@ -1021,7 +1022,6 @@ public final class Jobs extends JavaPlugin {
     public static void action(JobsPlayer jPlayer, ActionInfo info, Block block, Entity ent, LivingEntity victim) {
         if (jPlayer == null)
             return;
-
         List<JobProgression> progression = jPlayer.getJobProgression();
         int numjobs = progression.size();
 
@@ -1130,26 +1130,123 @@ public final class Jobs extends JavaPlugin {
             for (JobProgression prog : progression) {
                 if (prog.getJob().isWorldBlackListed(block, ent, victim))
                     continue;
-
                 if (jPlayer.isLeftTimeEnded(prog.getJob())) {
                     expiredJobs.add(prog.getJob());
                 }
 
                 JobInfo jobinfo = prog.getJob().getJobInfo(info, prog.getLevel());
-
                 checkDailyQuests(jPlayer, prog.getJob(), info);
+                double income = 0D;
+                double pointAmount = 0D;
+                double expAmount = 0D;
+                if (block != null) {
+                    CustomBlock customBlock = CustomBlock.byAlreadyPlaced(block);
+                    if (customBlock != null) {
+                        if (gConfigManager.disablePaymentIfMaxLevelReached && prog.getLevel() >= prog.getJob().getMaxLevel())
+                            continue;
 
-                if (jobinfo == null || (gConfigManager.disablePaymentIfMaxLevelReached && prog.getLevel() >= prog.getJob().getMaxLevel())) {
-                    continue;
+                        if (prog.getJob().getName().equals("Miner")) {
+                            //Bukkit.broadcastMessage(info.getNameWithSub() + "  " + info.getType() + "  " + customBlock.getNamespacedID());
+                            switch (customBlock.getNamespacedID()) {
+                                case "orespack1:jade_ore":
+                                case "orespack1:nether_jade_ore":
+                                case "orespack1:end_stone_jade_ore":
+                                    income = 0.4;
+                                    pointAmount = 0.3;
+                                    expAmount = 0.4;
+                                    break;
+
+                                case "orespack1:incandescent_crystal_ore":
+                                case "orespack1:nether_incandescent_crystal_ore":
+                                case "orespack1:end_stone_incandescent_crystal_ore":
+                                    income = 4;
+                                    pointAmount = 3;
+                                    expAmount = 3.5;
+                                    break;
+
+                                case "orespack1:blue_quartz_ore":
+                                case "orespack1:nether_blue_quartz_ore":
+                                case "orespack1:end_stone_blue_quartz_ore":
+                                    income = 3;
+                                    pointAmount = 2.75;
+                                    expAmount = 2.75;
+                                    break;
+
+                                case "orespack1:opal_ore":
+                                case "orespack1:nether_opal_ore":
+                                case "orespack1:end_stone_nether_opal_ore":
+                                    income = 0.9;
+                                    pointAmount = 0.7;
+                                    expAmount = 1.3;
+                                    break;
+
+                                case "noblemetals:silver_ore_nobel":
+                                    income = 0.7;
+                                    pointAmount = 0.6;
+                                    expAmount = 1;
+                                    break;
+                                case "noblemetals:osmium_ore":
+                                    income = 0.95;
+                                    pointAmount = 0.75;
+                                    expAmount = 1.4;
+                                    break;
+                                case "noblemetals:platinium_ore":
+                                    income = 2;
+                                    pointAmount = 1.5;
+                                    expAmount = 3;
+                                    break;
+
+                                case "iasurvival:blaze_powder_ore":
+                                    income = 0.5;
+                                    pointAmount = 0.3;
+                                    expAmount = 0.7;
+                                    break;
+
+                                case "ender_pack:ender_ore_block":
+                                    income = 4.5;
+                                    pointAmount = 4;
+                                    expAmount = 4.2;
+                                    break;
+
+                                case "iaalchemy:mysterious_ore":
+                                    income = 500;
+                                    pointAmount = 300;
+                                    expAmount = 100;
+                                    break;
+
+                                case "iasurvival:ruby_ore":
+                                    income = 1.8;
+                                    pointAmount = 1.5;
+                                    expAmount = 2.7;
+                                    break;
+                                case "iasurvival:dark_amethyst_ore":
+                                    income = 5;
+                                    pointAmount = 4;
+                                    expAmount = 4.5;
+                                    break;
+                            }
+                        }
+
+                        //}
+                    } else {
+                        if (jobinfo == null || (gConfigManager.disablePaymentIfMaxLevelReached && prog.getLevel() >= prog.getJob().getMaxLevel()))
+                            continue;
+
+                        income = jobinfo.getIncome(prog.getLevel(), numjobs, jPlayer.maxJobsEquation);
+                        pointAmount = jobinfo.getPoints(prog.getLevel(), numjobs, jPlayer.maxJobsEquation);
+                        expAmount = jobinfo.getExperience(prog.getLevel(), numjobs, jPlayer.maxJobsEquation);
+                    }
+
+                } else {
+                    if (jobinfo == null || (gConfigManager.disablePaymentIfMaxLevelReached && prog.getLevel() >= prog.getJob().getMaxLevel()))
+                        continue;
+                    income = jobinfo.getIncome(prog.getLevel(), numjobs, jPlayer.maxJobsEquation);
+                    pointAmount = jobinfo.getPoints(prog.getLevel(), numjobs, jPlayer.maxJobsEquation);
+                    expAmount = jobinfo.getExperience(prog.getLevel(), numjobs, jPlayer.maxJobsEquation);
                 }
-
-                double income = jobinfo.getIncome(prog.getLevel(), numjobs, jPlayer.maxJobsEquation);
-                double pointAmount = jobinfo.getPoints(prog.getLevel(), numjobs, jPlayer.maxJobsEquation);
-                double expAmount = jobinfo.getExperience(prog.getLevel(), numjobs, jPlayer.maxJobsEquation);
 
                 if (income == 0D && pointAmount == 0D && expAmount == 0D)
                     continue;
-
                 if (gConfigManager.addXpPlayer()) {
                     Player player = jPlayer.getPlayer();
                     if (player != null) {
@@ -1178,7 +1275,6 @@ public final class Jobs extends JavaPlugin {
                 }
 
                 Boost boost = getPlayerManager().getFinalBonus(jPlayer, prog.getJob(), ent, victim);
-
                 JobsPrePaymentEvent jobsPrePaymentEvent = new JobsPrePaymentEvent(jPlayer.getPlayer(), prog.getJob(), income,
                     pointAmount, block, ent, victim, info);
 
@@ -1266,7 +1362,6 @@ public final class Jobs extends JavaPlugin {
 
                 if (income == 0D && pointAmount == 0D && expAmount == 0D)
                     continue;
-
                 // JobsPayment event
                 JobsExpGainEvent jobsExpGainEvent = new JobsExpGainEvent(jPlayer.getPlayer(), prog.getJob(), expAmount,
                     block, ent, victim, info);
@@ -1455,6 +1550,54 @@ public final class Jobs extends JavaPlugin {
 
         JobsExpGainEvent jobsExpGainEvent = new JobsExpGainEvent(payment.getOfflinePlayer(), job, expPayment,
             block, ent, victim, info);
+        Bukkit.getServer().getPluginManager().callEvent(jobsExpGainEvent);
+        // If event is canceled, don't do anything
+        if (jobsExpGainEvent.isCancelled())
+            return;
+
+        checkDailyQuests(jPlayer, job, info);
+
+        payment.set(CurrencyType.EXP, jobsExpGainEvent.getExp());
+
+        boolean limited = true;
+        for (CurrencyType one : CurrencyType.values()) {
+            if (jPlayer.isUnderLimit(one, payment.get(one))) {
+                limited = false;
+                break;
+            }
+        }
+
+        if (limited)
+            return;
+
+        economy.pay(jPlayer, payment.getPayment());
+
+        JobProgression prog = jPlayer.getJobProgression(job);
+        int oldLevel = prog.getLevel();
+
+        if (gConfigManager.LoggingUse) {
+            getLoging().recordToLog(jPlayer, info, payment.getPayment());
+        }
+
+        if (prog.addExperience(expPayment))
+            getPlayerManager().performLevelUp(jPlayer, prog.getJob(), oldLevel);
+    }
+
+    public static void customPerform(JobsPlayer jPlayer, ActionInfo info, BufferedPayment payment, Job job, Block block, Entity ent, LivingEntity victim) {
+        double expPayment = payment.get(CurrencyType.EXP) + 4000;
+
+        JobsPrePaymentEvent jobsPrePaymentEvent = new JobsPrePaymentEvent(jPlayer.getPlayer(), job, payment.get(CurrencyType.MONEY),
+                payment.get(CurrencyType.POINTS), block, ent, victim, info);
+        Bukkit.getServer().getPluginManager().callEvent(jobsPrePaymentEvent);
+        // If event is canceled, don't do anything
+        if (jobsPrePaymentEvent.isCancelled())
+            return;
+
+        payment.set(CurrencyType.MONEY, 44);//jobsPrePaymentEvent.getAmount());
+        payment.set(CurrencyType.POINTS, 54);//jobsPrePaymentEvent.getPoints());
+
+        JobsExpGainEvent jobsExpGainEvent = new JobsExpGainEvent(payment.getOfflinePlayer(), job, expPayment,
+                block, ent, victim, info);
         Bukkit.getServer().getPluginManager().callEvent(jobsExpGainEvent);
         // If event is canceled, don't do anything
         if (jobsExpGainEvent.isCancelled())

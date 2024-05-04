@@ -26,6 +26,9 @@ import java.util.Map.Entry;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import com.gamingmesh.jobs.economy.BufferedPayment;
+import dev.lone.itemsadder.api.CustomBlock;
+import dev.lone.itemsadder.api.Events.CustomBlockBreakEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -416,9 +419,77 @@ public final class JobsPaymentListener implements Listener {
             Jobs.action(jPlayer, new ItemActionInfo(contents, ActionType.BREW));
         }
     }
+    @EventHandler
+    private void blockItemsadderBreak(CustomBlockBreakEvent event) {
+        final Block block = event.getBlock();
+
+        if (!Jobs.getGCManager().canPerformActionInWorld(block.getWorld()))
+            return;
+
+        Player player = event.getPlayer();
+
+        // Remove block owner ships
+        plugin.removeBlockOwnerShip(block);
+
+        // check if player is riding
+        if (Jobs.getGCManager().disablePaymentIfRiding && player.isInsideVehicle())
+            return;
+
+        // check if in creative
+        if (!payIfCreative(player))
+            return;
+
+        if (!Jobs.getPermissionHandler().hasWorldPermission(player, player.getLocation().getWorld().getName()))
+            return;
+
+        BlockActionInfo bInfo = new BlockActionInfo(block, ActionType.BREAK);
+
+        FastPayment fp = Jobs.FASTPAYMENT.get(player.getUniqueId());
+
+        if (fp != null) {
+            if (fp.getTime() > System.currentTimeMillis() && (fp.getInfo().getName().equalsIgnoreCase(bInfo.getName()) ||
+                    fp.getInfo().getNameWithSub().equalsIgnoreCase(bInfo.getNameWithSub()))) {
+                Jobs.perform(fp.getPlayer(), fp.getInfo(), fp.getPayment(), fp.getJob(), block, null, null);
+                return;
+            }
+
+            Jobs.FASTPAYMENT.remove(player.getUniqueId());
+        }
+
+        if (!payForItemDurabilityLoss(player))
+            return;
+
+        // Protection for block break with silktouch
+        if (Jobs.getGCManager().useSilkTouchProtection) {
+            ItemStack item = CMIItemStack.getItemInMainHand(player);
+
+            if (item.getType() != Material.AIR && Jobs.getBpManager().isInBp(block)) {
+                for (Enchantment one : item.getEnchantments().keySet()) {
+                    CMIEnchantment enchant = CMIEnchantment.get(one);
+                    if (enchant != null && enchant.equalEnum(CMIEnchantEnum.SILK_TOUCH)) {
+                        return;
+                    }
+                }
+            }
+        }
+        // Better implementation?
+        // Prevent money duplication when breaking plant blocks
+        /*Material brokenBlock = block.getRelative(BlockFace.DOWN).getType();
+        if (Jobs.getGCManager().preventCropResizePayment && (brokenBlock == CMIMaterial.SUGAR_CANE.getMaterial()
+            || brokenBlock == CMIMaterial.KELP.getMaterial()
+            || brokenBlock == CMIMaterial.CACTUS.getMaterial() || brokenBlock == CMIMaterial.BAMBOO.getMaterial())) {
+            return;
+        }*/
+        Jobs.action(Jobs.getPlayerManager().getJobsPlayer(player), bInfo, block);
+        breakCache.put(CMILocation.toString(block.getLocation(), ":", true, true), player.getUniqueId());
+    }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
+        CustomBlock customBlock = CustomBlock.byAlreadyPlaced(event.getBlock());
+        if(customBlock != null)
+            return;
+
         final Block block = event.getBlock();
 
         if (!Jobs.getGCManager().canPerformActionInWorld(block.getWorld()))
